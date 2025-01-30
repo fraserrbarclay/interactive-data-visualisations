@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Circular Radar Chart</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        text {
+            font-family: 'Roboto', sans-serif;
+        }
+        #saveButton {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            padding: 10px 16px;
+            font-size: 14px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
+        }
+        #saveButton:hover {
+            background-color: #0056b3;
+        }
+        .chart-container {
+            position: relative;
+            width: 800px;
+            height: 800px;
+            margin: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="chart-container">
+        <svg id="radarChart" width="800" height="800"></svg>
+        <button id="saveButton">Save as Image</button>
+    </div>
+
+    <script>
+        // Chart Dimensions
+        const width = 800, height = 800, radius = 250;
+        const svg = d3.select("#radarChart").attr("viewBox", `0 0 ${width} ${height}`);
+        const centerX = width / 2, centerY = height / 2;
+
+        // Add a white background rectangle
+        svg.append("rect")
+            .attr("width", width)
+            .attr("height", height)
+            .attr("fill", "white");
+
+        // Categories for the radar chart
+        const categories = [
+            "Staying organised", "My time management", "Satisfied with my performance",
+            "On time with duties and projects", "Get along with colleagues",
+            "Clear about my role & duties", "Satisfied with my participation",
+            "Staying on top of my emails"
+        ];
+
+        const numWedges = categories.length;
+        let values = new Array(numWedges).fill(0.1);
+
+        // Create Pie Function
+        const pie = d3.pie().value(() => 1)(new Array(numWedges).fill(1));
+
+        // Arc Generator (expands outward when clicked)
+        const arc = d3.arc()
+            .innerRadius(0)
+            .outerRadius(d => radius * values[d.index])
+            .startAngle(d => d.startAngle)
+            .endAngle(d => d.endAngle);
+
+        // Draw Wedges
+        let wedges = svg.append("g")
+            .attr("transform", `translate(${centerX},${centerY})`)
+            .selectAll("path")
+            .data(pie)
+            .enter().append("path")
+            .attr("d", arc)
+            .attr("fill", (d, i) => d3.schemeCategory10[i])
+            .attr("stroke", "#fff");
+
+        // Draw Wedge Boundary Lines
+        let grid = svg.append("g")
+            .attr("transform", `translate(${centerX},${centerY})`);
+
+        pie.forEach(d => {
+            let startX = Math.cos(d.startAngle) * radius;
+            let startY = Math.sin(d.startAngle) * radius;
+            let endX = Math.cos(d.endAngle) * radius;
+            let endY = Math.sin(d.endAngle) * radius;
+
+            grid.append("line")
+                .attr("x1", 0)
+                .attr("y1", 0)
+                .attr("x2", startX)
+                .attr("y2", startY)
+                .attr("stroke", "#666")
+                .attr("stroke-width", 1);
+
+            grid.append("line")
+                .attr("x1", 0)
+                .attr("y1", 0)
+                .attr("x2", endX)
+                .attr("y2", endY)
+                .attr("stroke", "#666")
+                .attr("stroke-width", 1);
+        });
+
+        // Draw Concentric Grid Lines
+        for (let i = 1; i <= 10; i++) {
+            grid.append("circle")
+                .attr("cx", 0)
+                .attr("cy", 0)
+                .attr("r", (radius / 10) * i)
+                .attr("fill", "none")
+                .attr("stroke", "#999")
+                .attr("stroke-dasharray", "4,4");
+        }
+
+        // Labels
+        let labelGroup = svg.append("g")
+            .attr("transform", `translate(${centerX},${centerY})`);
+
+        labelGroup.selectAll("text")
+            .data(pie)
+            .enter().append("text")
+            .attr("transform", d => {
+                let angle = (d.startAngle + d.endAngle) / 2;
+                let x = Math.cos(angle) * (radius * 1.1);
+                let y = Math.sin(angle) * (radius * 1.1);
+                let rotation = (angle * 180) / Math.PI + 90;
+                return `translate(${x},${y}) rotate(${rotation})`;
+            })
+            .attr("text-anchor", "middle")
+            .attr("fill", "black")
+            .style("font-family", "Roboto, sans-serif")
+            .style("font-size", "14px")
+            .style("font-weight", "bold")
+            .text((d, i) => categories[i]);
+
+        // Clickable Rings (Fixed)
+        let buttonLayer = svg.append("g")
+            .attr("transform", `translate(${centerX},${centerY})`);
+
+        for (let i = 1; i <= 10; i++) {
+            let level = i / 10;
+
+            buttonLayer.selectAll(`.clickable-ring-${i}`)
+                .data(pie)
+                .enter().append("path")
+                .attr("class", `clickable-ring-${i}`)
+                .attr("d", d3.arc()
+                    .innerRadius((radius / 10) * (i - 1))
+                    .outerRadius((radius / 10) * i)
+                    .startAngle(d => d.startAngle)
+                    .endAngle(d => d.endAngle)
+                )
+                .attr("fill", "transparent")
+                .style("cursor", "pointer")
+                .on("click", function (event, d) {
+                    let index = d.index;
+                    values[index] = level;
+                    wedges.filter((w, j) => j === index)
+                        .transition()
+                        .duration(500)
+                        .attr("d", d3.arc()
+                            .innerRadius(0)
+                            .outerRadius(radius * values[index])
+                            .startAngle(d.startAngle)
+                            .endAngle(d.endAngle)
+                        );
+                });
+        }
+
+        // Save Button
+        document.getElementById("saveButton").addEventListener("click", function() {
+            let serializer = new XMLSerializer();
+            let svgString = serializer.serializeToString(svg.node());
+
+            let canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            let ctx = canvas.getContext("2d");
+            let img = new Image();
+            img.onload = function() {
+                ctx.fillStyle = "white";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+                
+                let link = document.createElement("a");
+                link.download = "radar_chart.png";
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+            };
+            img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgString)));
+        });
+
+    </script>
+</body>
+</html>
